@@ -29,7 +29,7 @@ input,select{width:100%;padding:12px 13px;border:1px solid var(--line);border-ra
 input:focus,select:focus{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(101,119,109,.12)}
 .form4{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .form4 .full{grid-column:1/-1}
-@media(max-width:560px){.form4{grid-template-columns:1fr}.form4 .full{grid-column:auto}}
+
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 button,.btnlink{border:0;border-radius:12px;padding:11px 15px;font-weight:800;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .primary{background:var(--accent);color:#fff}
@@ -58,6 +58,12 @@ td.actions-cell{text-align:center}
 .summary b{display:block;font-size:20px;margin-top:4px}
 footer{color:var(--muted);font-size:12px;line-height:1.7;margin:18px 0 8px}
 .hidden{display:none!important}
+
+@media(max-width:560px){
+  .form4{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .form4 label{font-size:12px}
+  .form4 input{padding:10px 8px;font-size:14px}
+}
 </style>
 </head>
 <body>
