@@ -64,6 +64,42 @@ footer{color:var(--muted);font-size:12px;line-height:1.7;margin:18px 0 8px}
   .form4 label{font-size:12px}
   .form4 input{padding:10px 8px;font-size:14px}
 }
+
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.chart-card{border:1px solid var(--line);border-radius:14px;background:#fff;padding:12px}
+.chart-head{display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:8px}
+.chart-head b{font-size:16px}
+.chart-head span{color:var(--muted);font-size:12px}
+.chart-canvas{width:100%;height:280px;display:block;background:linear-gradient(to bottom,#fbfcfb,#f6f8f6);border-radius:10px}
+.chart-empty{color:var(--muted);font-size:13px;text-align:center;padding:24px 8px}
+@media(max-width:900px){.charts{grid-template-columns:1fr}}
+@media(max-width:560px){.chart-canvas{height:240px}}
+
+
+.history-progress-wrap{
+  margin:10px 0 14px;
+  background:#e7ebe8;
+  border-radius:999px;
+  height:16px;
+  overflow:hidden;
+  border:1px solid var(--line);
+}
+.history-progress-bar{
+  width:0%;
+  min-width:3px;
+  height:100%;
+  background:linear-gradient(90deg,var(--accent2),var(--accent));
+  transition:width .18s ease;
+}
+.history-progress-meta{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  font-size:12px;
+  color:var(--muted);
+  margin-top:6px;
+}
+
 </style>
 </head>
 <body>
@@ -71,7 +107,7 @@ footer{color:var(--muted);font-size:12px;line-height:1.7;margin:18px 0 8px}
   <div class="topbar">
     <div>
       <h1>合作金庫 USD / CNY 每日匯率統計</h1>
-      <div class="sub">NAAN姐 專用，可匯出全年 Excel。</div>
+      <div class="sub">開啟頁面即取得合作金庫最新 USD / CNY 即期匯率，自動計算 A、B，並可匯出全年 Excel。</div>
     </div>
     <div class="pill"><span class="dot"></span><span id="clock">--</span></div>
   </div>
@@ -165,11 +201,39 @@ footer{color:var(--muted);font-size:12px;line-height:1.7;margin:18px 0 8px}
         </table>
       </div>
     </section>
+
+    <section class="card span-12">
+      <div class="section-title">數字 A / B 變化趨勢圖</div>
+      <div class="sub" style="margin:0 0 8px;font-size:13px">趨勢圖固定從 2026/01/01 起累積；之後每次開啟會再加入當天最新資料。</div>
+      <div id="historyStatus" class="notice ok" style="margin-bottom:10px">正在快速檢查 2026/01/01 起的歷史資料…</div>
+      <div class="history-progress-wrap" aria-label="歷史資料抓取進度">
+        <div id="historyProgressBar" class="history-progress-bar"></div>
+      </div>
+      <div class="history-progress-meta">
+        <span id="historyProgressText">等待檢查歷史資料…</span>
+        <strong id="historyProgressPct">0%</strong>
+      </div>
+      <div style="margin-top:10px">
+        <button class="ghost" id="retryHistoryBtn" type="button">重新抓取歷史資料</button>
+      </div>
+      <div class="charts">
+        <div class="chart-card">
+          <div class="chart-head"><b>數字 A 變化趨勢圖</b><span id="chartALabel">—</span></div>
+          <canvas id="chartA" class="chart-canvas"></canvas>
+          <div id="chartAEmpty" class="chart-empty hidden">目前沒有可繪製的 A 資料</div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-head"><b>數字 B 變化趨勢圖</b><span id="chartBLabel">—</span></div>
+          <canvas id="chartB" class="chart-canvas"></canvas>
+          <div id="chartBEmpty" class="chart-empty hidden">目前沒有可繪製的 B 資料</div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <footer>
     資料來源：合作金庫牌告匯率。合作金庫亦註明牌告資料僅供參考，實際交易匯率以交易當時顯示為準。<br>
-    每次取得當日匯率後會自動將 A、B 與四項即期匯率記錄在目前瀏覽器的 localStorage；同一天再次查詢會更新當日紀錄，不重複新增。資料會持續累積，直到你匯出 Excel 或自行刪除。清除瀏覽器網站資料可能一併刪除，因此仍建議定期匯出 Excel 或 JSON 備份。
+    趨勢資料自 2026/01/01 起累積；今天與未來每次開啟會取得合作金庫最新牌告，且每日統計只保留第一筆。歷史補值完成後會保存在目前瀏覽器的 localStorage。資料會持續累積，直到你匯出 Excel 或自行刪除。清除瀏覽器網站資料可能一併刪除，因此仍建議定期匯出 Excel 或 JSON 備份。
   </footer>
 </div>
 
@@ -177,6 +241,9 @@ footer{color:var(--muted);font-size:12px;line-height:1.7;margin:18px 0 8px}
 const KEY='tcb_usd_cny_yearly_v1';
 const $=id=>document.getElementById(id);
 let records=load();
+const HISTORY_KEY='tcb_usd_cny_trend_history_v1';
+let historyRecords=loadHistory();
+const HISTORY_START='2026-01-01';
 
 function pad(n){return String(n).padStart(2,'0')}
 function todayLocal(){
@@ -210,6 +277,52 @@ function load(){
   try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return []}
 }
 function persist(){localStorage.setItem(KEY,JSON.stringify(records))}
+
+function loadHistory(){
+  try{return JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]')}catch{return []}
+}
+function persistHistory(){localStorage.setItem(HISTORY_KEY,JSON.stringify(historyRecords))}
+function dateRange(start,end){
+  const out=[]; let d=new Date(start+'T00:00:00'); const e=new Date(end+'T00:00:00');
+  while(d<=e){out.push(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`);d.setDate(d.getDate()+1)}
+  return out;
+}
+
+function businessDateRange(start,end){
+  return dateRange(start,end).filter(s=>{
+    const d=new Date(s+'T00:00:00').getDay();
+    return d!==0 && d!==6;
+  });
+}
+
+function yesterdayLocal(){
+  const d=new Date();d.setDate(d.getDate()-1);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function mergeHistoryRecord(rec,defer=false){
+  if(!rec||!rec.date)return;
+  const idx=historyRecords.findIndex(r=>r.date===rec.date);
+  if(idx>=0) historyRecords[idx]=rec; else historyRecords.push(rec);
+  if(!defer){
+    historyRecords.sort((a,b)=>a.date.localeCompare(b.date));
+    persistHistory();
+  }
+}
+function syncSavedRecordsToHistory(){
+  let changed=false;
+  for(const r of records){
+    if(r.date>=HISTORY_START){
+      const before=historyRecords.length;
+      mergeHistoryRecord({...r,source:r.source||'合作金庫即時'},true);
+      if(historyRecords.length!==before || historyRecords.some(h=>h.date===r.date)) changed=true;
+    }
+  }
+  if(changed){
+    historyRecords.sort((a,b)=>a.date.localeCompare(b.date));
+    persistHistory();
+  }
+}
+
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 
 $('saveBtn').onclick=()=>{
@@ -226,6 +339,7 @@ $('saveBtn').onclick=()=>{
   records.push(rec);
   records.sort((a,b)=>a.date.localeCompare(b.date));
   persist();
+  if(rec.date>=HISTORY_START) mergeHistoryRecord({...rec,source:'合作金庫即時'});
   refreshFilters();
   render();
   setStatus(`${rec.date} 第一筆資料已儲存。`);
@@ -241,9 +355,153 @@ function refreshFilters(){
 }
 $('yearFilter').onchange=render; $('monthFilter').onchange=render;
 
+
+
+function getFilteredList(ascending=false){
+  const end=todayLocal();
+  const list=historyRecords.filter(r=>r.date>=HISTORY_START && r.date<=end && Number.isFinite(r.A) && Number.isFinite(r.B));
+  list.sort((a,b)=>ascending?a.date.localeCompare(b.date):b.date.localeCompare(a.date));
+  return list;
+}
+
+function drawTrendChart(canvasId, emptyId, labelId, list, key, title){
+  const canvas=$(canvasId), empty=$(emptyId), label=$(labelId);
+  const dpr=window.devicePixelRatio||1;
+  const host=canvas.parentElement;
+  const cssW=Math.max(280, Math.floor(host.clientWidth-2));
+  const cssH=Math.max(220, Math.floor(canvas.clientHeight||280));
+  canvas.width=Math.floor(cssW*dpr);
+  canvas.height=Math.floor(cssH*dpr);
+  canvas.style.width=cssW+'px';
+  canvas.style.height=cssH+'px';
+  const ctx=canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const pts=list.filter(r=>Number.isFinite(r[key])).map(r=>({xLabel:r.date.slice(5), y:Number(r[key]), full:r.date}));
+  if(pts.length===0){
+    canvas.classList.add('hidden');
+    empty.classList.remove('hidden');
+    label.textContent='無資料';
+    return;
+  }
+  canvas.classList.remove('hidden');
+  empty.classList.add('hidden');
+  const axisStart=HISTORY_START;
+  const axisEnd=todayLocal();
+  label.textContent = `${axisStart} ～ ${axisEnd}（${pts.length} 筆）`;
+
+  const vals=pts.map(p=>p.y);
+  let min=Math.min(...vals), max=Math.max(...vals);
+  if(min===max){ min=min-0.01; max=max+0.01; }
+  const pad=(max-min)*0.15 || 0.01;
+  min -= pad; max += pad;
+
+  const left=48, right=14, top=18, bottom=34;
+  const w=cssW-left-right, h=cssH-top-bottom;
+  const startMs=new Date(axisStart+'T00:00:00').getTime();
+  const endMs=new Date(axisEnd+'T00:00:00').getTime();
+  const spanMs=Math.max(86400000,endMs-startMs);
+  const xForDate=date => left + ((new Date(date+'T00:00:00').getTime()-startMs)/spanMs)*w;
+  const yAt=v => top + (max-v)/(max-min)*h;
+
+  // background grid
+  ctx.strokeStyle='rgba(101,119,109,.18)';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let i=0;i<5;i++){
+    const y=top + i*(h/4);
+    ctx.moveTo(left,y); ctx.lineTo(left+w,y);
+  }
+  ctx.stroke();
+
+  // axes labels
+  ctx.fillStyle='#6f7772';
+  ctx.font='12px Microsoft JhengHei, sans-serif';
+  ctx.textAlign='right';
+  ctx.textBaseline='middle';
+  for(let i=0;i<5;i++){
+    const v=max - i*(max-min)/4;
+    const y=top + i*(h/4);
+    ctx.fillText(v.toFixed(4), left-6, y);
+  }
+
+  // x 軸固定由 2026/01/01 到今天，顯示約 6 個日期刻度
+  ctx.textAlign='center';
+  ctx.textBaseline='top';
+  const tickCount=6;
+  for(let i=0;i<tickCount;i++){
+    const ratio=i/(tickCount-1);
+    const ms=startMs + spanMs*ratio;
+    const d=new Date(ms);
+    const labelText=`${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
+    const x=left+w*ratio;
+    ctx.fillText(labelText,x,top+h+8);
+  }
+
+  // line
+  ctx.strokeStyle= key==='A' ? '#5b7d6a' : '#9b6b6b';
+  ctx.lineWidth=2.5;
+  ctx.beginPath();
+  pts.forEach((p,i)=>{
+    const x=xForDate(p.full), y=yAt(p.y);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // area fill
+  ctx.save();
+  ctx.beginPath();
+  pts.forEach((p,i)=>{
+    const x=xForDate(p.full), y=yAt(p.y);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.lineTo(xForDate(pts[pts.length-1].full), top+h);
+  ctx.lineTo(xForDate(pts[0].full), top+h);
+  ctx.closePath();
+  const grad=ctx.createLinearGradient(0,top,0,top+h);
+  if(key==='A'){
+    grad.addColorStop(0,'rgba(91,125,106,.24)');
+    grad.addColorStop(1,'rgba(91,125,106,0)');
+  }else{
+    grad.addColorStop(0,'rgba(155,107,107,.24)');
+    grad.addColorStop(1,'rgba(155,107,107,0)');
+  }
+  ctx.fillStyle=grad;
+  ctx.fill();
+  ctx.restore();
+
+  // points
+  pts.forEach((p,i)=>{
+    const x=xForDate(p.full), y=yAt(p.y);
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle= key==='A' ? '#5b7d6a' : '#9b6b6b';
+    ctx.lineWidth=2;
+    ctx.stroke();
+  });
+
+  // title and latest info
+  ctx.fillStyle='#2f3532';
+  ctx.textAlign='left';
+  ctx.textBaseline='top';
+  ctx.font='bold 13px Microsoft JhengHei, sans-serif';
+  ctx.fillText(`${title}｜最新值 ${pts[pts.length-1].y.toFixed(4)}`, left, 2);
+}
+
+function renderCharts(){
+  const asc=getFilteredList(true);
+  drawTrendChart('chartA','chartAEmpty','chartALabel',asc,'A','數字 A');
+  drawTrendChart('chartB','chartBEmpty','chartBLabel',asc,'B','數字 B');
+}
+let chartResizeTimer=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(chartResizeTimer);
+  chartResizeTimer=setTimeout(renderCharts,150);
+});
+
 function render(){
-  const y=$('yearFilter').value, m=$('monthFilter').value;
-  const list=records.filter(r=>r.date.startsWith(y+'-')&&(m==='all'||r.date.slice(5,7)===m)).sort((a,b)=>b.date.localeCompare(a.date));
+  const list=getFilteredList(false);
   $('tbody').innerHTML=list.length?list.map(r=>`<tr>
     <td>${esc(r.date)}</td><td>${esc(r.time||'')}</td>
     <td>${r.usdBuy.toFixed(4)}</td><td>${r.usdSell.toFixed(4)}</td><td>${r.cnyBuy.toFixed(4)}</td><td>${r.cnySell.toFixed(4)}</td>
@@ -255,6 +513,7 @@ function render(){
   $('mCount').textContent=ml.length;
   const avg=k=>ml.length?(ml.reduce((s,r)=>s+r[k],0)/ml.length).toFixed(4):'—';
   $('mAAvg').textContent=avg('A'); $('mBAvg').textContent=avg('B'); $('mGapAvg').textContent=avg('gap');
+  renderCharts();
 }
 window.delRec=date=>{
   if(!confirm(`刪除 ${date} 的紀錄？`))return;
@@ -284,6 +543,8 @@ function autoSaveFirstRecordOfDay(){
   // 每天只記錄「第一筆成功抓取」資料。
   // 當天之後再次查詢，只更新畫面，不覆蓋統計紀錄。
   if(records.some(r=>r.date===rec.date)){
+    const existing=records.find(r=>r.date===rec.date);
+    if(existing && rec.date>=HISTORY_START && !historyRecords.some(h=>h.date===rec.date)) mergeHistoryRecord({...existing,source:'合作金庫即時'});
     refreshFilters();
     render();
     return 'exists';
@@ -297,6 +558,176 @@ function autoSaveFirstRecordOfDay(){
   return 'saved';
 }
 
+
+
+function setHistoryProgress(done,total,ok=0,failed=0,label=''){
+  const pct=total>0?Math.min(100,Math.max(done>0?1:0,Math.round(done/total*100))):100;
+  const bar=$('historyProgressBar');
+  const pctEl=$('historyProgressPct');
+  const txt=$('historyProgressText');
+
+  bar.style.width=pct+'%';
+  pctEl.textContent=pct+'%';
+  txt.textContent=label || (total>0
+    ? `已完成 ${done}/${total}｜成功 ${ok}｜失敗 ${failed}`
+    : '已完成');
+
+  // 強制瀏覽器安排一次重繪，手機上也能即時看到進度。
+  void bar.offsetWidth;
+}
+
+async function fetchMirrorText(url){
+  const candidates=[
+    url,
+    'https://api.allorigins.win/raw?url='+encodeURIComponent(url)
+  ];
+
+  async function tryOne(u){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),1800);
+    try{
+      const res=await fetch(u,{cache:'force-cache',signal:controller.signal});
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const tx=await res.text();
+      if(!tx || tx.length<=100) throw new Error('empty');
+      return tx;
+    }finally{
+      clearTimeout(timer);
+    }
+  }
+
+  return await Promise.any(candidates.map(tryOne));
+}
+function parseFindRateCoop(text,date){
+  const plain=text.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/\s+/g,' ');
+  // FindRate table row order: 現鈔買入、現鈔賣出、即期買入、即期賣出、日期
+  const re=/合作金庫(?:商業銀行)?\s+(-|\d+(?:\.\d+)?)\s+(-|\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)/i;
+  const m=plain.match(re);
+  if(!m)return null;
+  return [parseFloat(m[3]),parseFloat(m[4])];
+}
+
+function withTimeout(promise,ms,label='連線逾時'){
+  return Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(label)),ms))
+  ]);
+}
+
+async function fetchHistoricalPair(date){
+  const [y,m,d]=date.split('-');
+  const u=`https://historical.findrate.tw/currencyhis.php?c=USD&day=${d}&month=${m}&year=${y}`;
+  const c=`https://historical.findrate.tw/currencyhis.php?c=CNY&day=${d}&month=${m}&year=${y}`;
+  const [ut,ct]=await withTimeout(Promise.all([fetchMirrorText(u),fetchMirrorText(c)]),4200,`歷史資料 ${date} 逾時`);
+  const usd=parseFindRateCoop(ut,date), cny=parseFindRateCoop(ct,date);
+  if(!usd||!cny)return null;
+  const A=Number((usd[0]/cny[1]).toFixed(4));
+  const B=Number((usd[1]/cny[0]).toFixed(4));
+  return {date,time:'歷史',usdBuy:usd[0],usdSell:usd[1],cnyBuy:cny[0],cnySell:cny[1],A,B,gap:Number((B-A).toFixed(4)),source:'合作金庫歷史牌告（歷史鏡像）'};
+}
+let historyBackfillRunning=false;
+async function backfillHistory(){
+  if(historyBackfillRunning) return;
+  historyBackfillRunning=true;
+  const retryBtn=$('retryHistoryBtn');
+  if(retryBtn) retryBtn.disabled=true;
+
+  try{
+    syncSavedRecordsToHistory();
+    const existingCount=historyRecords.filter(r=>r.date>=HISTORY_START).length;
+    $('historyStatus').textContent=`本機目前已有 ${existingCount} 筆歷史資料，正在檢查缺漏…`;
+    setHistoryProgress(0,1,existingCount,0,`目前已載入 ${existingCount} 筆，正在檢查…`);
+
+    // 一定先讓 0% 狀態畫出來，再進行網路工作。
+    await new Promise(resolve=>setTimeout(resolve,80));
+
+    const end=yesterdayLocal();
+    if(end<HISTORY_START){
+      setHistoryProgress(1,1,existingCount,0,'目前沒有需要補抓的歷史資料');
+      $('historyStatus').textContent='目前沒有需要補抓的歷史資料。';
+      renderCharts();
+      return;
+    }
+
+    const have=new Set(historyRecords.map(r=>r.date));
+    const missing=businessDateRange(HISTORY_START,end).filter(x=>!have.has(x));
+    if(!missing.length){
+      $('historyStatus').textContent=`歷史資料已完整：${HISTORY_START} ～ ${end}，共 ${existingCount} 筆。`;
+      setHistoryProgress(1,1,existingCount,0,`已完整載入 ${existingCount} 筆`);
+      renderCharts();
+      return;
+    }
+
+    const total=missing.length;
+    let done=0, ok=0, failed=0;
+    const batchSize=4;
+    let consecutiveAllFailBatches=0;
+
+    $('historyStatus').textContent=`尚缺 ${total} 個工作日，開始抓取…`;
+    setHistoryProgress(0,total,0,0,`0/${total}｜開始連線`);
+    await new Promise(resolve=>setTimeout(resolve,60));
+
+    for(let start=0;start<total;start+=batchSize){
+      const batch=missing.slice(start,start+batchSize);
+      const staged=[];
+      let batchOk=0;
+      $('historyStatus').textContent=`正在抓取 ${batch[0]}${batch.length>1?' ～ '+batch[batch.length-1]:''}`;
+
+      const results=await Promise.allSettled(batch.map(async date=>{
+        try{
+          const rec=await withTimeout(fetchHistoricalPair(date),5000,`抓取 ${date} 超時`);
+          return {date,rec};
+        }catch(e){
+          return {date,rec:null,error:String(e&&e.message||e)};
+        }
+      }));
+
+      for(const result of results){
+        done++;
+        const value=result.status==='fulfilled'?result.value:null;
+        if(value && value.rec){
+          staged.push(value.rec); ok++; batchOk++;
+        }else{
+          failed++;
+        }
+        setHistoryProgress(done,total,ok,failed,`已完成 ${done}/${total}｜成功 ${ok}｜失敗 ${failed}`);
+        await new Promise(resolve=>setTimeout(resolve,15));
+      }
+
+      if(staged.length){
+        const map=new Map(historyRecords.map(r=>[r.date,r]));
+        for(const rec of staged) map.set(rec.date,rec);
+        historyRecords=[...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
+        try{persistHistory()}catch(e){}
+        renderCharts();
+      }
+
+      if(batchOk===0) consecutiveAllFailBatches++;
+      else consecutiveAllFailBatches=0;
+
+      // 手機 content:// 若連續兩批完全失敗，代表跨網域大多被封鎖；直接停止，避免等十分鐘。
+      if(consecutiveAllFailBatches>=2){
+        $('historyStatus').textContent='歷史資料連線失敗：手機目前以 content:// 開啟本機 HTML，瀏覽器很可能阻擋跨網站資料抓取。已停止重試，避免持續卡住。';
+        setHistoryProgress(done,total,ok,failed,`已停止｜完成 ${done}/${total}｜成功 ${ok}｜失敗 ${failed}`);
+        return;
+      }
+
+      await new Promise(resolve=>setTimeout(resolve,40));
+    }
+
+    $('historyStatus').textContent=`歷史資料抓取完成：目前共保存 ${historyRecords.length} 筆。`;
+    setHistoryProgress(total,total,ok,failed,`完成｜成功 ${ok}｜失敗 ${failed}`);
+    renderCharts();
+  }catch(e){
+    $('historyStatus').textContent='歷史資料抓取發生錯誤：'+String(e&&e.message||e);
+    const bar=$('historyProgressBar'); if(bar) bar.style.width='100%';
+    const pct=$('historyProgressPct'); if(pct) pct.textContent='錯誤';
+    const txt=$('historyProgressText'); if(txt) txt.textContent='抓取流程已停止，請按「重新抓取歷史資料」再試一次。';
+  }finally{
+    historyBackfillRunning=false;
+    if(retryBtn) retryBtn.disabled=false;
+  }
+}
 async function fetchTextWithFallback(){
   const official='https://www.tcb-bank.com.tw/personal-banking/deposit-exchange/exchange-rate/spot';
   const urls=[
@@ -456,9 +887,13 @@ function download(blob,name){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
 
-// 開頁立即更新最新匯率
-refreshFilters();render();calc();
-setTimeout(()=>updateNow(true),500);
+// 開頁立即顯示本機資料，並直接啟動歷史檢查；不再依賴延遲計時器才開始。
+refreshFilters();syncSavedRecordsToHistory();render();calc();
+if($('retryHistoryBtn')) $('retryHistoryBtn').onclick=()=>backfillHistory();
+backfillHistory().catch(e=>{
+  $('historyStatus').textContent='歷史資料啟動失敗：'+String(e&&e.message||e);
+});
+setTimeout(()=>updateNow(true),300);
 </script>
 </body>
 </html>
